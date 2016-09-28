@@ -32,6 +32,7 @@ function New-WTTAzureDocumentDb
 		WriteLabel("Creating DocumentDB")
 
 		#Register DocumentDB provider service
+        $systemWebAssembly = [reflection.assembly]::loadwithpartialname("system.web")
 		Do{
             $status = (Get-AzureRmResourceProvider -ProviderNamespace Microsoft.DocumentDb).RegistrationState
 		    if ($status -ne "Registered")
@@ -51,10 +52,123 @@ function New-WTTAzureDocumentDb
         {
             WriteError("Failed")
         }
+        $documentDBPrimaryKey = (Invoke-AzureRmResourceAction -ResourceGroupName $azureResourceGroupName -ResourceName $wttDocumentDbName -ResourceType Microsoft.DocumentDb/databaseAccounts -Action listkeys -Force).primarymasterkey
+       
+        #Create DocDB Database
+        $item = "crunchbase"
+        
+        WriteLabel("Creating DocDB Database $item")
+        $method = "Post"
+        $resourceId = ""
+        $resourceType = "dbs"
+        $date = (Get-Date).ToUniversalTime()
+        $xDate = $date.ToString('r',[System.Globalization.CultureInfo]::InvariantCulture)
+        $masterKey = $documentDBPrimaryKey
+        $docDBToken = createAuthToken $method $resourceId $resourceType $xDate $masterKey
+        $header = @{"Authorization" = "$docDBToken";`
+                    "x-ms-date" = "$xDate";`
+                    "x-ms-version" = "2015-08-06"
+                    }
+        $newIOTDatabase = "https://$wttDocumentDbName.documents.azure.com:443/dbs"
+        $body = "{""id"": ""$item""}"
+        $newIOTDatabasePost = Invoke-RestMethod -Uri $newIOTDatabase -Body $body -Method Post -Headers $header -ContentType "application/json"
+        
+        #Get DocDB Database
+        $method = "Get"
+        $resourceId = ""
+        $resourceType = "dbs"
+        $date = (Get-Date).ToUniversalTime()
+        $xDate = $date.ToString('r',[System.Globalization.CultureInfo]::InvariantCulture)
+        $masterKey = $documentDBPrimaryKey
+        $docDBToken = createAuthToken $method $resourceId $resourceType $xDate $masterKey      
+        $header = @{"Authorization" = "$docDBToken";`
+                    "x-ms-date" = "$xDate";`
+                    "x-ms-version" = "2015-08-06"
+                    }
+        $getIOTDatabase = Invoke-RestMethod -Uri $newIOTDatabase -Method Get -Headers $header -ContentType "application/json"
+        $dbs = @($getIOTDatabase.Databases.id)
+        foreach($db in $dbs)
+        {
+            if($db -like $item)
+            {
+                WriteValue "Successful"
+            }
+        }
+            
+       <#WriteLabel("Creating DocDB Database Collection $item")
+        #Create DocDB Database Collection       
+        $method = "Post"
+        $resourceId = "dbs/$item"
+        $resourceType = "colls"
+        $date = (Get-Date).ToUniversalTime()
+        $xDate = $date.ToString('r',[System.Globalization.CultureInfo]::InvariantCulture)
+        $masterKey = $documentDBPrimaryKey
+        $docDBToken = createAuthToken $method $resourceId $resourceType $xDate $masterKey
+        $header = @{"Authorization" = "$docDBToken";`
+                    "x-ms-date" = "$xDate";`
+                    "x-ms-version" = "2015-08-06";`
+                    "x-ms-offer-throughput" = "400"
+                    }
+        $newIOTDatabaseCollection = "https://$wttDocumentDbName.documents.azure.com/dbs/$item/colls"
+        $body = "{
+                    ""id"": ""AWProducts"",
+                            ""indexingPolicy"": {
+                                ""automatic"": true,
+                                ""indexingMode"": ""Consistent"",
+                                ""includedPaths"": [
+                                {
+                                    ""path"": ""/*"",
+                                    ""indexes"": [
+                                        {
+                                        ""dataType"": ""String"",
+                                        ""precision"": -1,
+                                        ""kind"": ""Range""
+                                        }
+                                    ]
+                                }
+                                ]
+                            }
+                    }"
+        $newIOTDatabaseCollectionPost = Invoke-RestMethod -Uri $newIOTDatabaseCollection -Method Post -Body $body -Headers $header -ContentType "application/json"
+        
+        <#Get DocDB Database Collection
+        $method = "Get"
+        $resourceId = "dbs/AWProducts"
+        $resourceType = "colls"
+        $date = (Get-Date).ToUniversalTime()
+        $xDate = $date.ToString('r',[System.Globalization.CultureInfo]::InvariantCulture)
+        $masterKey = $documentDBPrimaryKey
+        $docDBToken = createAuthToken $method $resourceId $resourceType $xDate $masterKey
+        $header = @{"Authorization" = "$docDBToken";`
+                    "x-ms-date" = "$xDate";`
+                    "x-ms-version" = "2015-08-06"
+                    }
+        $getIOTDatabaseCollectionURL = "https://$wttDocumentDbName.documents.azure.com/dbs/$item/colls"
+        $getIOTDatabaseCollection = Invoke-RestMethod -Uri $getIOTDatabaseCollectionURL -Method Get -Headers $header
+        if($getIOTDatabaseCollection.DocumentCollections.id -like "AWProducts")
+        {
+            WriteValue("Successful")
+        }#>  
+        
+        #load crunchbase data
+        $crunchbase = Get-Item ".\resources\datafactory\crunchbase.json"
+        .\dt\dt.exe /s:JsonFile /s.Files:$crunchbase /t:DocumentDBBulk /t.ConnectionString:"AccountEndpoint="https://$wttDocumentDbName.documents.azure.com:443";AccountKey=$documentDBPrimaryKey;Database="crunchbase";" /t.Collection:crunchbase /t.CollectionTier:S1
+                  
 	}
 	Catch
 	{
 		WriteValue("Failed")
 		WriteError($Error)
 	}
-} 
+}
+function createAuthToken ($method, $resourceId, $resourceType, $xdate, $masterKey)
+{
+  $keyBytes = [System.Convert]::FromBase64String($masterKey)
+  $sigCleartext = @($method.ToLower() + "`n" + $resourceType.ToLower() + "`n" + $resourceId + "`n" + $xdate.ToLowerInvariant() + "`n" + "" + "`n")
+  $bytesSigClear =[Text.Encoding]::UTF8.GetBytes($sigCleartext)
+  $hmacsha = new-object -TypeName System.Security.Cryptography.HMACSHA256 -ArgumentList (,$keyBytes) 
+  $hash = $hmacsha.ComputeHash($bytesSigClear)  
+  $signature = [System.Convert]::ToBase64String($hash)
+  $key  = [System.Web.HttpUtility]::UrlEncode($('type=master&ver=1.0&sig=' + $signature))
+  return $key
+}

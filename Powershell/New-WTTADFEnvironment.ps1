@@ -19,9 +19,9 @@ function New-WTTADFEnvironment
 		# Resource Group Name
 		[Parameter(Mandatory=$true)]
 		[String]
-		$azureResourceGroupName,
+		$azureResourceGroupName
 
-		# SQL Database Server Name
+		<## SQL Database Server Name
 		[Parameter(Mandatory=$true)]
 		[String]
 		$azureSqlServerName,
@@ -45,7 +45,7 @@ function New-WTTADFEnvironment
 		# SQL Database Password
 		[Parameter(Mandatory=$true)]
 		[String]
-		$adminPassword
+		$adminPassword#>
 	)
 
 	Process
@@ -71,20 +71,20 @@ function New-WTTADFEnvironment
 			    RegisterProvider
 
 			    # Get StorageAccount Key
-			    $storageAccountKey = GetStorageAccountKey
-                CreateStorageContainer($storageAccountKey)
+			    #$storageAccountKey = GetStorageAccountKey
+                #CreateStorageContainer($storageAccountKey)
 
 			    # Set up Mapping Dictionary
-			    SetupMappingDictionary($storageAccountKey)
+			    #SetupMappingDictionary($storageAccountKey)
                 
                 # Create and Deploy Database
-			    CreateDatabase
-			    CreateSchema
-			    PopulateDatabase
+			    #CreateDatabase
+			    #CreateSchema
+			    #PopulateDatabase
 
 			    # Create DataFactory
 			    CreateDataFactory
-			    PopulateProductRecommendation($storageAccountKey)
+			    #PopulateProductRecommendation($storageAccountKey)
 		    }
 		    Catch
 		    {
@@ -112,7 +112,7 @@ function RegisterProvider()
 	}
 }
 
-function GetStorageAccountKey()
+<#function GetStorageAccountKey()
 {
 	# Get Storage Account Primary Key
     $storageExists = Find-AzureRmResource -ResourceNameContains $ApplicationName -ResourceGroupNameContains $azureResourceGroupName -ResourceType Microsoft.Storage/storageaccounts
@@ -153,7 +153,7 @@ function CreateStorageContainer($storageAccountKey)
                 Write-Host 'error.'
             }
         }       
-}
+}#>
 
 function SetupMappingDictionary($StorageAccountKey)
 {
@@ -173,7 +173,7 @@ function SetupMappingDictionary($StorageAccountKey)
 	$global:dict.Add('<pipeline start time>',$pipelineStartTime.ToString("yyyy-MM-01T00:00:00Z"))##
 }
 
-function CreateDatabase()
+<#function CreateDatabase()
 {
 	Try
 	{
@@ -254,7 +254,7 @@ function PopulateDatabase
 		WriteValue("Failed")
 		throw $Error
 	}
-}
+}#>
 
 function CreateDataFactory()
 {
@@ -287,7 +287,7 @@ function CreateDataFactory()
 		throw $Error
 	}
 }
-
+<#
 function RemoveDataFactory()
 {
     Try
@@ -309,8 +309,8 @@ function RemoveDataFactory()
         WriteValue("Failed")
 		throw $Error
     }
-}
-
+}#>
+<#
 function PopulateProductRecommendation($StorageAccountKey)
 {
     LineBreak
@@ -398,7 +398,7 @@ function PopulateProductRecommendation($StorageAccountKey)
 
 	# Deploy the pipelines/data sets and linked services
 	Invoke-Expression "$scriptPath $argumentList >> setup-log.txt"
-}
+}#>
 
 function Update-JSONFile( $file )
 {
